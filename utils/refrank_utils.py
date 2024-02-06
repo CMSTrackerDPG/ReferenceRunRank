@@ -141,3 +141,136 @@ def comp_duration(run_df):
     
     run_df['duration'] = (run_df['end_time'] - run_df['start_time']).dt.total_seconds()
     return run_df
+
+####
+
+def has_fill(df):
+    """
+    Input: dataframe
+    
+    Returns: dataframe 
+    
+    This function returns a dataframe where only entries that have a non-null "fill_number" attribute are kept.
+    """
+    df_nonNaN = df[df.fill_number.isna() == False].copy()
+    df_NaN = df[df.fill_number.isna() == True].copy()
+    
+    return df_nonNaN, df_NaN
+
+def addfillordernum(df): # Test
+    dfcopy = df.copy()
+    dfcopy['fill_order_num'] = np.empty(len(dfcopy))
+    dfcopy['num_runs_in_fill'] = np.empty(len(dfcopy))
+    temp = dfcopy.groupby("fill_number")["run_number"].transform('count')    
+    x = 1
+    for count, i in enumerate(temp):
+        if x == i :
+            dfcopy['fill_order_num'].iloc[count] = int(x)
+            dfcopy['num_runs_in_fill'].iloc[count] = int(i)
+            x = 1
+            continue
+        dfcopy['fill_order_num'].iloc[count] = int(x)
+        dfcopy['num_runs_in_fill'].iloc[count] = int(i)
+        x += 1
+        
+    return dfcopy
+
+def add_loc_wrt_fill(df):
+    import numpy as np
+    dfcopy = df.copy()
+    dfcopy["Fill location"] = np.empty(len(dfcopy))
+    temp = dfcopy.groupby("fill_number")["run_number"].transform('count')    
+    x = 1
+    for count,i in enumerate(temp):
+        if x == i :
+            dfcopy['Fill location'].iloc[count]="({}/{})".format(x,i)
+            x = 1
+            continue
+        dfcopy['Fill location'].iloc[count]="({}/{})".format(x,i)
+        x += 1
+        
+    return dfcopy
+
+def makeDF(json):
+    datadict=json['data'][0]['attributes']
+    keys=datadict.keys()
+    
+    datasetlist=[]
+    
+    for i in range(len(json['data'])):
+        values=json['data'][i]['attributes'].values()
+        datasetlist.append(values)
+    return pd.DataFrame(datasetlist,columns=keys)#\
+#     .set_index(['fill_number','run_number'])\
+#     .sort_index()
+
+def convert_check_addFillLoc(json):
+    """
+    Expects a json from with the attribute "fill_number" in the query
+    
+    """
+    df = makeDF(json)
+    #now filter out runs that don't  have fill number
+    df = has_fill(df)
+    #now add run location wrt fill
+    DF_withloc = add_loc_wrt_fill(df)
+    return DF_withloc
+
+def get_collisions(rundf,lsdf):
+    rundf_coll = rundf[rundf['l1_hlt_mode']\
+                       .str\
+                       .contains('collisions')]\
+    
+    rundf_notcoll = rundf[~rundf['l1_hlt_mode']\
+                          .str\
+                          .contains('collisions')]
+    
+    lsdf_coll = lsdf[lsdf['run_number'].isin(rundf_coll['run_number'])]
+    lsdf_notcoll = lsdf[lsdf['run_number'].isin(rundf_notcoll['run_number'])]
+        
+    return rundf_coll, lsdf_coll, rundf_notcoll, lsdf_notcoll
+    
+    
+def get_runs_in_ls_df(lsdf):
+    """
+    Gets the list of run numbers in the lumi df
+    """
+    return lsdf['run_number'].unique()
+
+def missing_runs(runsdf,lsdf,fromlumi=True):
+    '''
+    Function takes both run and lumi df and find missing runs.
+    Returns:  list of missing runs
+    
+    ----
+    fromlumi :  defaults to True
+                This will look for missing run numbers from the Lumi df
+                if False : returns missing run numbers from the Run df
+    '''
+    
+    miss_runs=[]
+    runsINls=get_runs_in_ls_df(lsdf)
+    if fromlumi:
+        for i in runsdf['run_number'].values:
+            if i not in runsINls:
+                miss_runs.append(i)
+    else:
+        for i in runsINls:
+            if i not in runsdf['run_number'].values:
+                miss_runs.append(i)
+    return miss_runs
+
+
+
+def get_pileup(lsdf):
+    """
+    Gets the pileup from the lumi df and returns a Pandas Series with mean PU per run.
+    """
+    return lsdf.groupby(['run_number'])['pileup'].mean()
+
+def get_avg_initLumi(lsdf):
+    """
+    Gets average init luminosity for each run from the LS dataframe
+    """
+    
+    return lsdf.groupby(["run_number"])["init_lumi"].mean()
