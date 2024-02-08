@@ -30,7 +30,7 @@ def subdivide_range(oldest_run, newest_run, step=1000):
     
     return ranges
 
-def get_runs_lss(run_range, omsapi, run_attribs=[], ls_attribs=[], save=False, file_format="pqt"):
+def get_runs_lss(run_range, omsapi, run_attribs=[], ls_attribs=[], run_filters=[], ls_filters=[]):
     """
     Downloads run and lumisection level metadata for a given range of runs.
     
@@ -44,13 +44,13 @@ def get_runs_lss(run_range, omsapi, run_attribs=[], ls_attribs=[], save=False, f
         and lumisection level features for the specified range or runs.
     """
     
-    run_df = download_oms_data(run_range, omsapi, "runs", run_attribs)
-    ls_df = download_oms_data(run_range, omsapi, "lumisections", ls_attribs)
+    run_df = download_oms_data(run_range, omsapi, "runs", run_attribs, extrafilters=run_filters)
+    ls_df = download_oms_data(run_range, omsapi, "lumisections", ls_attribs, extrafilters=ls_filters)
     return run_df, ls_df
     
     
     
-def download_oms_data(run_range, omsapi, attribs_level, attribs=[], save=False, file_format="pqt"):
+def download_oms_data(run_range, omsapi, attribs_level, attribs=[], extrafilters=[]):
     """
     Downloads run and lumisection level metadata for a given range of runs.
     
@@ -83,18 +83,20 @@ def download_oms_data(run_range, omsapi, attribs_level, attribs=[], save=False, 
                 attribs_level, 
                 runs, 
                 limit_entries=limit_entries,
-                attributes=attribs
+                attributes=attribs,
+                extrafilters=extrafilters
             )
 
-        oms_df = pd.concat([oms_df, rrr.makeDF(oms_json).convert_dtypes()])
-        time.sleep(2)
+            oms_df = pd.concat([oms_df, rrr.makeDF(oms_json).convert_dtypes()])
+            time.sleep(2)
     else: 
         oms_json = get_oms_data(
                 omsapi, 
                 attribs_level, 
                 run_range, 
                 limit_entries=limit_entries,
-                attributes=attribs
+                attributes=attribs,
+                extrafilters=extrafilters
             )
         oms_df = rrr.makeDF(oms_json).convert_dtypes()
         

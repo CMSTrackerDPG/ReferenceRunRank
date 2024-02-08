@@ -21,7 +21,13 @@ def get_weights(df, standardize=True, plot=False):
         scaler = StandardScaler()
         df = pd.DataFrame(scaler.fit_transform(df), columns=df.columns)
     if plot:
-        sns.pairplot(df)
+        grid = sns.pairplot(df, corner=True, plot_kws={'edgecolor': 'none', 's': 1})
+        grid.fig.set_dpi(150)
+        for ax in grid.axes.flatten():
+            if ax:
+                ax.set_xlabel(ax.get_xlabel(), fontsize=10)
+                ax.set_ylabel(ax.get_ylabel(), fontsize=10)
+                ax.tick_params(axis='both', labelsize=8)
         plt.show()
     pca = PCA(n_components=1)
     pca.fit(df)
