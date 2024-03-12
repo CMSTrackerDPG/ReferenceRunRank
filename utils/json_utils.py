@@ -29,9 +29,6 @@ import numpy as np
 
 # local modules
 
-
-
-
 ### reading and writing json files
 
 def loadjson( jsonfile ):
@@ -50,6 +47,8 @@ def loadjson( jsonfile ):
     return jsondict
 
 
+#######
+
 def writejson( jsondict, outputfile, overwrite=False ):
     ### inverse function of loadjson
     # input arguments
@@ -60,9 +59,6 @@ def writejson( jsondict, outputfile, overwrite=False ):
         raise Exception('ERROR in json_utils.py / writejson: requested output file already exists.'
                        +' You can suppress this error by giving "overwrite=True" as additional argument')
     with open(outputfile,'w') as f: json.dump(jsondict,f)
-
-
-
 
 ### checking if given run/lumi values are in a given json object
 
@@ -168,9 +164,6 @@ def ispixelbad(run, lumi):
     jsonloc2018 = None
     return injson(run,lumi,jsonfile=jsonloc2017)
 
-
-
-
 ### conversions with other useful formats
 
 def plainlist_to_rangelist( plainlist ):
@@ -235,8 +228,6 @@ def jsondict_to_tuplelist( jsondict ):
             lslist = rangelist_to_plainlist( lumiranges )
         tuplelist.append( (int(runnb), lslist) )
     return tuplelist
-
-
 
 
 def get_lcs( jsonlist ):
