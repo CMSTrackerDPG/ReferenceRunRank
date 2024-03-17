@@ -7,14 +7,14 @@ from sklearn.decomposition import PCA
 import os
 from refrunrank.utilities import json_utils
 
+
 class ranker:
     """
     Takes care of handling data used for ranking as well as the process of ranking iteself.
     """
+
     def __init__(self):
         pass
-
-
 
 
 def get_weights(df, standardize=True, plot=False):
@@ -72,6 +72,7 @@ def refrank(target_df, candidates_df, n_components=2):
     rankings.rename(columns=new_column_names, inplace=True)
 
     return rankings
+
 
 def filter_runs(
     run_df,
