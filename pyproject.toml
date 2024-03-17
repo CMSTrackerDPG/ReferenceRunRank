@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "refrunrank"
+version = "0.0.1"
+authors = [
+    {name = "Roy Cruz", email = "roy.cruz.candelaria@cern.ch"}
+]
+description = "Tools for the automated selection of reference runs"
+readme = "README.md"
+requires-python = ">=3.8"
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.urls]
+Homepage = "https://github.com/roy-cruz/RefRunRank"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/refrunrank"]
