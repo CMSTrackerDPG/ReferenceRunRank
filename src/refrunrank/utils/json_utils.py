@@ -26,34 +26,6 @@ import os
 import json
 import numpy as np
 
-# local modules
-
-### reading and writing json files
-
-
-def loadjson(jsonfile):
-    ### load the content of a json file into a python object
-    # input arguments:
-    # - jsonfile: the name (or full path if needed) to the json file to be read
-    # output:
-    # - an dict object as specified in the note below
-    # note: the json file is supposed to contain an object like this example:
-    #       { "294927": [ [ 55,85 ], [ 95,105] ], "294928": [ [1,33 ] ] }
-    #       although no explicit checking is done in this function,
-    #       objects that don't have this structure will probably lead to errors further in the code
-    if not os.path.exists(jsonfile):
-        raise Exception(
-            "ERROR in json_utils.py / loadjson: requested json file {} does not seem to exist...".format(
-                jsonfile
-            )
-        )
-    with open(jsonfile) as f:
-        jsondict = json.load(f)
-    return jsondict
-
-
-#######
-
 
 def writejson(jsondict, outputfile, overwrite=False):
     ### inverse function of loadjson

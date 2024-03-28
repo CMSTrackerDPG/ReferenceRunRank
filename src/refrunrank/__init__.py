@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+import os
 from fnmatch import fnmatch
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
@@ -51,7 +52,7 @@ class RunRanker:
         """
         Removes NaN values in the given dataframe
         """
-        self.rundf = self.rundf[self.rundf.fill_number.isna() is False]
+        self.rundf = self.rundf[~self.rundf["fill_number"].isna()]
         self.rundf = self.rundf.convert_dtypes()
         self.rundf.select_dtypes(include=["number"]).fillna(0, inplace=True)
         self.rundf.select_dtypes(include=["object"]).fillna("", inplace=True)
@@ -313,46 +314,91 @@ class CHRunData:
     Credit for original JSON implementation: Gabriele Benelli
     """
 
-    def __init__(self, JSONFilename):
+    def __init__(self, JSONFilePath, goldenJSONFilePath=None, filtergolden=True):
         """Reading in the list of dictionaries in the "JSON" produced by the CertHelper API: e.g.  {"run_number": 306584, "run_reconstruction_type": "rereco", "reference_run_number": 305810, "reference_run_reconstruction_type": "express", "dataset": "/SingleTrack/Run2017G-17Nov2017-v1/DQMIO"}"""
-        # self.JSONFilename=JSONFilename
-        self.JSONFile = open(JSONFilename, "r")
-        self.JSON = json.load(self.JSONFile)
-        self.RunsDF = pd.DataFrame(self.JSON)
+        self.RunsDF = self._loadJSONasDF(JSONFilePath)
         self.RunsDF.dropna(inplace=True)
+
         self.filteredDF = None
         self.AllRunsByYear = {}
 
+        self.goldenDF = None
+        self.goldenRunsDF = None
+        if goldenJSONFilePath is not None:
+            self.goldenDF = self._loadJSONasDF(goldenJSONFilePath)
+            self.goldenDF = self.goldenDF.T.reset_index().rename(
+                {"index": "run", 0: "LSs"}, axis=1
+            )
+            self.goldenDF = self.goldenDF.astype({"run": int})
+            self.filtergolden()
+
+    def _loadJSONasDF(self, JSONFilePath):
+        ### load the content of a json file into a python object
+        # input arguments:
+        # - jsonfile: the name (or full path if needed) to the json file to be read
+        # output:
+        # - an dict object as specified in the note below
+        # note: the json file is supposed to contain an object like this example:
+        #       { "294927": [ [ 55,85 ], [ 95,105] ], "294928": [ [1,33 ] ] }
+        #       although no explicit checking is done in this function,
+        #       objects that don't have this structure will probably lead to errors further in the code
+        if not os.path.exists(JSONFilePath):
+            raise Exception(
+                "ERROR in json_utils.py / loadjson: requested json file {} does not seem to exist...".format(
+                    JSONFilePath
+                )
+            )
+        with open(JSONFilePath) as f:
+            JSONdict = json.load(f)
+        return pd.DataFrame(JSONdict).convert_dtypes()
+
+    def filtergolden(self):
+        if self.goldenDF is None:
+            raise Exception("No golden JSON loaded.")
+        self.goldenRunsDF = self.RunsDF[
+            self.RunsDF["run_number"].isin(self.goldenDF["run"])
+        ]
+
+        return self.goldenRunsDF
+
     def applyfilter(self, filters={}):
+        if self.goldenRunsDF is not None:
+            try:
+                RunsDF = self.goldenRunsDF
+            except:
+                raise Exception("Could not use goldenRunsDF to apply filters")
+        else:
+            RunsDF = self.RunsDF
+
         if len(filters) == 0:
             print("Warning: No filter conditions given.")
-            return self.RunsDF
+            return RunsDF
 
-        mask = pd.Series([True] * len(self.RunsDF), index=self.RunsDF.index)
+        mask = pd.Series([True] * len(RunsDF), index=RunsDF.index)
 
         for key, value in filters.items():
             if isinstance(value, tuple) and key in [
                 "run_number",
                 "reference_run_number",
             ]:
-                mask &= (self.RunsDF[key] >= value[0]) & (self.RunsDF[key] <= value[1])
+                mask &= (RunsDF[key] >= value[0]) & (RunsDF[key] <= value[1])
             elif isinstance(value, list) and key in [
                 "run_number",
                 "reference_run_number",
             ]:
-                mask &= self.RunsDF[key].isin(value)
+                mask &= RunsDF[key].isin(value)
             elif isinstance(value, (int, float)) and key in [
                 "run_number",
                 "reference_run_number",
             ]:
-                mask &= self.RunsDF[key] == value
+                mask &= RunsDF[key] == value
             elif isinstance(value, str) and key in [
                 "run_reconstruction_type",
                 "reference_run_reconstruction_type",
                 "dataset",
             ]:
-                mask &= self.RunsDF[key].apply(lambda x: fnmatch(x, value))
+                mask &= RunsDF[key].apply(lambda x: fnmatch(x, value))
 
         # filteredDF = self.RunsDF[mask]
-        self.filteredDF = self.RunsDF[mask]
+        self.filteredDF = RunsDF[mask]
         return self.filteredDF
