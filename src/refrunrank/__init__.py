@@ -228,11 +228,6 @@ class RunRanker:
         """
         Function which extracts features with low correlation only and then applies filtering of the features based on the sum of the weights as determined by pca
         """
-        #     ftr_names = list(features.columns)
-        #     if "duration" in ftr_names:
-        #         features = features.drop(columns=["duration"])
-        #     if "last_lumisection_number" in ftr_names:
-        #         features = features.drop(columns=["last_lumisection_number"])
 
         # Columns to exclude
         excluded_ftrs = ["duration", "last_lumisection_number", "fill_number"]
@@ -315,7 +310,9 @@ class CHRunData:
     """
 
     def __init__(self, JSONFilePath, goldenJSONFilePath=None, filtergolden=True):
-        """Reading in the list of dictionaries in the "JSON" produced by the CertHelper API: e.g.  {"run_number": 306584, "run_reconstruction_type": "rereco", "reference_run_number": 305810, "reference_run_reconstruction_type": "express", "dataset": "/SingleTrack/Run2017G-17Nov2017-v1/DQMIO"}"""
+        """
+        Reading in the list of dictionaries in the "JSON" produced by the CertHelper API: e.g.  {"run_number": 306584, "run_reconstruction_type": "rereco", "reference_run_number": 305810, "reference_run_reconstruction_type": "express", "dataset": "/SingleTrack/Run2017G-17Nov2017-v1/DQMIO"}
+        """
         self.RunsDF = self._loadJSONasDF(JSONFilePath)
         self.RunsDF.dropna(inplace=True)
 
@@ -333,15 +330,7 @@ class CHRunData:
             self.filtergolden()
 
     def _loadJSONasDF(self, JSONFilePath):
-        ### load the content of a json file into a python object
-        # input arguments:
-        # - jsonfile: the name (or full path if needed) to the json file to be read
-        # output:
-        # - an dict object as specified in the note below
-        # note: the json file is supposed to contain an object like this example:
-        #       { "294927": [ [ 55,85 ], [ 95,105] ], "294928": [ [1,33 ] ] }
-        #       although no explicit checking is done in this function,
-        #       objects that don't have this structure will probably lead to errors further in the code
+        """ """
         if not os.path.exists(JSONFilePath):
             raise Exception(
                 "ERROR in json_utils.py / loadjson: requested json file {} does not seem to exist...".format(
@@ -402,3 +391,35 @@ class CHRunData:
         # filteredDF = self.RunsDF[mask]
         self.filteredDF = RunsDF[mask]
         return self.filteredDF
+
+    def getruns(self, run, colfilters=None):
+        """
+        Simpler function to get particular runs and their features. Intended mostly for testing
+        """
+        CHftrs = [
+            "run_number",
+            "run_reconstruction_type",
+            "reference_run_type",
+            "reference_run_reconstruction_type",
+            "dataset",
+        ]
+        try:
+            runs = self.RunsDF[self.RunsDF["run_number"] == run]
+            if colfilters is None:
+                return runs
+            else:
+                if isinstance(colfilters, list):
+                    badftrs = []
+                    for colfilter in colfilters:
+                        if colfilter not in CHftrs:
+                            badftrs.append(colfilter)
+                            print(
+                                "WARNING: {} not a valid CH feature. Skipping.".format(
+                                    colfilter
+                                )
+                            )
+                    return runs[list(set(colfilters) - set(badftrs))]
+                else:
+                    raise Exception("colfilters must be of type list")
+        except:
+            raise Exception("Run is not available.")
