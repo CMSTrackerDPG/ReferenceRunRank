@@ -1,22 +1,31 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
+[tool.poetry]
 name = "refrunrank"
-version = "0.0.1"
-authors = [
-    {name = "Roy Cruz", email = "roy.cruz.candelaria@cern.ch"}
-]
 description = "Tools for the automated selection of reference runs"
 readme = "README.md"
-requires-python = ">=3.8"
+authors = [
+    {name = "Roy Cruz", email = "roy.cruz.candelaria@cern.ch"}
+    {name = "Guillermo Fidalgo", email = "guillermo.fidalgo@upr.edu"}
+]
+repository = "https://github.com/CMSTrackerDPG/ReferenceRunRank"
+packages = [{ include = "refrunrank", from = "src" }]
 
-[project.optional-dependencies]
-test = ["pytest"]
+[tool.poetry.dependency]
+python = "^3.11"
+numpy = "^1.26.4"
+pandas = "^2.2.2"
+cmsdials = "^1.4.0"
+dqmexplore = { git = "https://github.com/CMSTrackerDPG/DQMExplore.git" }
+ipykernel = { version = "^6.29.4", optional = true }
+ipywidgets = { version = "^8.1.2", optional = true }
+nbformat = { version = "^5.10.4", optional = true }
 
-[project.urls]
-Homepage = "https://github.com/roy-cruz/RefRunRank"
+[tool.poetry.extras]
+nb = [
+    "ipykernel",
+    "ipywidgets",
+    "nbformat",
+]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/refrunrank"]
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

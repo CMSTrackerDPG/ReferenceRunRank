@@ -4,8 +4,6 @@ rankingftrs = [
     "l1_triggers_counter",
     "hlt_physics_throughput",
     "init_lumi",
-    "recorded_lumi",
-    "delivered_lumi",
     "crossing_angle_stop",
     "energy",
     "end_lumi",
@@ -22,6 +20,8 @@ rankingftrs = [
 ]
 
 filteringftrs = [
+    "recorded_lumi",
+    "delivered_lumi",
     "duration",
     "last_lumisection_number",
     "beamactive_total_deadtime",

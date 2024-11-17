@@ -2,9 +2,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+import os
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-import os
+from scipy.cluster.hierarchy import linkage, fcluster
 from refrunrank.utils import data_utils
 
 class RunRanker:
@@ -25,15 +26,20 @@ class RunRanker:
         return self._ftrsdict
 
     def constructFeatures(self):
-        self.ftrsDF = pd.DataFrame(index=self.omsdata.getRunnbs())
+        self.ftrsDF = pd.DataFrame(index=self.omsdata.getData().index.to_list()) # Find better approach to get list of runnbs
         self.ftrsDF.index.name = "run_number"
+        feature_data = [self.ftrsDF]  # Collect dataframes to concatenate later
+    
         for endpoint, ftrs in self._ftrsdict.items():
             if endpoint == "runs":
-                self.ftrsDF = pd.concat([self.ftrsDF, self.omsdata.getData("runs")[ftrs]], axis=1)
-            if endpoint == "lumisections":
+                feature_data.append(self.omsdata.getData("runs")[ftrs])
+            elif endpoint == "lumisections":
                 for stat_key, base_ftrs in ftrs.items():
                     lsftrs = self.constructLSFeatures(stat_key, base_ftrs)
-                    self.ftrsDF = pd.concat([self.ftrsDF, lsftrs], axis=1)
+                    feature_data.append(lsftrs)
+    
+        # Concatenate all dataframes at once
+        self.ftrsDF = pd.concat(feature_data, axis=1)
 
     def constructLSFeatures(self, stat_key, base_ftrs):
         ls_df = self.omsdata.getData("lumisections").select_dtypes(include=[int, float])
@@ -44,51 +50,19 @@ class RunRanker:
             stats_df = pd.concat([stats_df, pd.DataFrame(newstats_df).T.set_index("run_number")])
         stats_df = stats_df.add_suffix("_{}".format(stat_key))
         return stats_df
-        
-                
-    def refrank(self, target, n_components=2):
-        """
-        Interphase to refrank_pca
-        """
-        if target not in self.ftrsDF.reset_index()["run_number"].values:
-            raise ValueError("Data of target run not loaded.")
-
-        # selected_ftrs = [col for col, include in self.rankftrs.items() if include]
-        target_df = pd.DataFrame(self.ftrsDF.loc[target]).T
-        candidates_df = self.rundf[self.ftrsDF.index < target]
-
-        rankings, wghts = self.refrank_pca(
-            target_df, candidates_df, n_components=n_components
-        )
-
-        # Add a new 'rank' column with a range of values starting from 0
-        rankings["rank"] = range(len(rankings))
-        rankings.index.names = ["run"]
-
-        # Set both 'rank' and 'run' as indices
-        rankings = rankings.reset_index().set_index(["rank", "run"])
-
-        # Construct a new dictionary mapping original column names to 'name (weight)' format
-        new_column_names = {
-            original: f"{original} ({round(wght, 4)})"
-            for original, wght in wghts.items()
-        }
-
-        # Rename the columns using the new dictionary
-        rankings.rename(columns=new_column_names, inplace=True)
-
-        self.latest_rankings.append(rankings)
-
-        return rankings
 
     def refrank_pca(
         self,
         target_runnb,
-        n_components=None,
+        n_components=1,
         keep_ftrs=True,
+        selected_ftrs=None
     ):
+        features = self.ftrsDF
+        if selected_ftrs is not None:
+            features = features[selected_ftrs]
  
-        features = self.ftrsDF[self.ftrsDF.index <= target_runnb]
+        features = features[features.index <= target_runnb]
         run_nums = pd.Series(features.index)
         
         # Scaling for PCA
@@ -97,22 +71,18 @@ class RunRanker:
             scaler.fit_transform(features), columns=features.columns
         )
 
-        # If n_components not, specified, set it to max.
-        if n_components is None:
-            n_components = len(features.columns)
-
         # Finding PCs
         pca = PCA(n_components=n_components)
         pca.fit(features)
 
-        # Constructing dataframe with standardized features
+        # Constructing df w/ standardized features
         features_PC = pd.DataFrame(
             pca.transform(features),
             columns=["PC" + str(k + 1) for k in range(len(pca.components_))],
         )
         features_PC = pd.concat([run_nums, features_PC], axis=1).set_index("run_number")
 
-        # Computing Eucledian distance in PCA space
+        # Computing Eucledian distance in PCA sub-space
         dist = np.sqrt(((features_PC - features_PC.loc[target_runnb]) ** 2).sum(axis=1))
         features_PC["dist"] = dist.values
         features_PC = features_PC.sort_values(by="dist", ascending=True).reset_index()
@@ -124,37 +94,46 @@ class RunRanker:
 
         return features_PC, wghts
 
-    def get_weights(self, df: pd.DataFrame, standardize=True, plot=False) -> np.ndarray:
-        """
-        Returns the weights for each of the features present in the data contained in a pandas dataframe as determined by the coefficients of the first principal component.
+    def hierarch_clust(self, target_runnb, n_components=1, corr_thrshld=0.7, rtrn_stats=False):
+        _, wghts = self.refrank_pca(target_runnb, n_components=n_components)
+        wghts_df = pd.DataFrame(list(wghts.items()), columns=["Feature", "Weight"])
+        wghts_df = wghts_df.sort_values(by="Weight", ascending=False).reset_index(drop=True)
+        
+        corr_mtrx = self.ftrsDF.corr()
+        corr_mtrx = corr_mtrx.fillna(0)
+        corr_dist = 1-corr_mtrx.abs()
+        
+        dist_condensed = corr_dist.values[np.triu_indices_from(corr_dist, k=1)]
+        linkage_mtrx = linkage(dist_condensed, method="complete")
+        clusters = fcluster(linkage_mtrx, t=corr_thrshld, criterion="distance")
+        
+        clustered_ftrs = {}
+        for idx, cluster_id in enumerate(clusters):
+            feature = corr_mtrx.columns[idx]
+            if cluster_id not in clustered_ftrs:
+                clustered_ftrs[cluster_id] = [feature]
+            else:
+                clustered_ftrs[cluster_id].append(feature)
+        selected_ftrs = []
+        
+        for cluster, features in clustered_ftrs.items():
+            if len(features) == 1:
+                selected_ftrs.append(features[0])
+            else:
+                top_ftr_idx = wghts_df[wghts_df["Feature"].isin(features)]["Weight"].idxmax()
+                top_ftr = wghts_df.iloc[top_ftr_idx]["Feature"]
+                selected_ftrs.append(top_ftr)
 
-        Args:
-            df: Dataframe containing each run (target and candidates) with its features
-            standardize: Whether or not the features will be standardized.
-            plot: Whether or not to make a plot of all the features. Helps with understanding correlation between them.
+        if rtrn_stats:
+            order = leaves_list(linkage_mtrx)
+            ordered_corr_mtrx = corr_mtrx.iloc[order, order]
+            return selected_ftrs, ordered_corr_mtrx, linkage_mtrx
+        return selected_ftrs
 
-        Returns:
-            Returns a numpy array of the weights of the features, in the same order as they appear in the columns of the dataframe.
-        """
-        if standardize:
-            scaler = StandardScaler()
-            df = pd.DataFrame(scaler.fit_transform(df), columns=df.columns)
-        if plot:
-            grid = sns.pairplot(df, corner=True, plot_kws={"edgecolor": "none", "s": 1})
-            grid.fig.set_dpi(150)
-            for ax in grid.axes.flatten():
-                if ax:
-                    ax.set_xlabel(ax.get_xlabel(), fontsize=10)
-                    ax.set_ylabel(ax.get_ylabel(), fontsize=10)
-                    ax.tick_params(axis="both", labelsize=8)
-            plt.show()
-        pca = PCA(n_components=1)
-        pca.fit(df)
-        pc1_loadings = pca.components_[0]
-        pc1_df = pd.DataFrame(pc1_loadings, index=df.columns, columns=["PC1 Loadings"])
-        pc1_df["weights"] = pc1_df["PC1 Loadings"] ** 2  # Already normalized
-
-        return pc1_df["weights"].to_numpy()
+    def refrank_pca_hierarch(self, target_runnb, n_components=1, keep_ftrs=True, corr_thrshld=0.7):
+        selected_ftrs = self.hierarch_clust(target_runnb, n_components=n_components, corr_thrshld=corr_thrshld)
+        rslts, wghts = self.refrank_pca(target_runnb, n_components=n_components, keep_ftrs=keep_ftrs, selected_ftrs=selected_ftrs)
+        return (rslts, wghts)
 
     def lowcorr_highweight(
         self,
