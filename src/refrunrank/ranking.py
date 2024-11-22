@@ -1,112 +1,149 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 import os
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from scipy.cluster.hierarchy import linkage, fcluster
-from refrunrank.utils import data_utils
 
 class RunRanker:
-    """
-    Class which takes as input applied ranking algorithm.
-    """
 
     def __init__(self, omsdata, ftrs=[], weight_thrshld=1, corr_thrshld=1):
         self._setOMSData(omsdata)
+        
 
     def _setOMSData(self, omsdata):
         self.omsdata = omsdata
 
+    
     def setFeatures(self, ftrsdict):
         self._ftrsdict = ftrsdict
 
+    
     def getFeatures(self):
         return self._ftrsdict
 
+    
     def constructFeatures(self):
+        """Costruct features dataframe that is used for ranking runs."""
         self.ftrsDF = pd.DataFrame(index=self.omsdata.getData().index.to_list()) # Find better approach to get list of runnbs
-        self.ftrsDF.index.name = "run_number"
+        self.ftrsDF.index.name = "runnb"
         feature_data = [self.ftrsDF]  # Collect dataframes to concatenate later
     
         for endpoint, ftrs in self._ftrsdict.items():
             if endpoint == "runs":
                 feature_data.append(self.omsdata.getData("runs")[ftrs])
             elif endpoint == "lumisections":
+                stats_df = self.omsdata.getData("lumisections").select_dtypes(include=[int, float]).groupby("runnb").describe()
                 for stat_key, base_ftrs in ftrs.items():
-                    lsftrs = self.constructLSFeatures(stat_key, base_ftrs)
-                    feature_data.append(lsftrs)
+                    feature_data.extend(self.constructLSFeatures(stats_df, stat_key, base_ftrs))
     
-        # Concatenate all dataframes at once
-        self.ftrsDF = pd.concat(feature_data, axis=1)
+            # Concatenate all dataframes at once
+            self.ftrsDF = pd.concat(feature_data, axis=1)
 
-    def constructLSFeatures(self, stat_key, base_ftrs):
-        ls_df = self.omsdata.getData("lumisections").select_dtypes(include=[int, float])
-        stats_df = pd.DataFrame()
-        for runnb in ls_df.index.get_level_values(0).unique():
-            newstats_df = ls_df.loc[runnb].describe()[base_ftrs].loc[stat_key]
-            newstats_df["run_number"] = runnb
-            stats_df = pd.concat([stats_df, pd.DataFrame(newstats_df).T.set_index("run_number")])
-        stats_df = stats_df.add_suffix("_{}".format(stat_key))
-        return stats_df
+        self.ftrsDF.fillna(-999, inplace=True)
+        self.ftrsDF = self.ftrsDF[~self.ftrsDF.apply(lambda row: -999 in row.values, axis=1)]
+        self.ftrsDF_dropped = self.ftrsDF[self.ftrsDF.apply(lambda row: -999 in row.values, axis=1)]
 
+    
+    def constructLSFeatures(self, stats_df, stat_key, base_ftrs):
+        """Construct summary statistics for LS-level features."""
+        statftrs_cols = []
+        for ftr in base_ftrs:
+            statftrs_cols.append(
+                pd.DataFrame(stats_df[ftr][stat_key]).add_prefix("{}_".format(ftr))
+            )
+        return statftrs_cols
+
+    
     def refrank_pca(
         self,
         target_runnb,
         n_components=1,
         keep_ftrs=True,
-        selected_ftrs=None
+        selected_ftrs=None,
+        runnbs=None,
+        dist_metric="eucl"
     ):
-        features = self.ftrsDF
+        """Ranks runs according to their proximity to the target run in a computed PCA sub-space."""
+        if not hasattr(self, "ftrsDF") or self.ftrsDF is None:
+            raise AttributeError("Features DataFrame (ftrsDF) has not been constructed. Call constructFeatures first.")
+    
+        # Apply filters to select runs
+        features = self.filterRuns(runnbs)
+    
         if selected_ftrs is not None:
             features = features[selected_ftrs]
- 
+        
         features = features[features.index <= target_runnb]
+        if features.empty:
+            raise ValueError("No runs available for ranking after filtering.")
+        
         run_nums = pd.Series(features.index)
         
-        # Scaling for PCA
+        # Scaling
         scaler = StandardScaler()
         features = pd.DataFrame(
             scaler.fit_transform(features), columns=features.columns
         )
-
+    
         # Finding PCs
         pca = PCA(n_components=n_components)
         pca.fit(features)
-
+    
         # Constructing df w/ standardized features
         features_PC = pd.DataFrame(
             pca.transform(features),
             columns=["PC" + str(k + 1) for k in range(len(pca.components_))],
         )
-        features_PC = pd.concat([run_nums, features_PC], axis=1).set_index("run_number")
-
-        # Computing Eucledian distance in PCA sub-space
-        dist = np.sqrt(((features_PC - features_PC.loc[target_runnb]) ** 2).sum(axis=1))
+        features_PC = pd.concat([run_nums, features_PC], axis=1).set_index("runnb")
+    
+        # Euclidean distance in PCA sub-space
+        if dist_metric == "eucl":
+            dist = np.sqrt(((features_PC - features_PC.loc[target_runnb]) ** 2).sum(axis=1))
+        elif dist_metric == "manh":
+            dist = (features_PC - features_PC.loc[target_runnb]).abs().sum(axis=1)
+        else:
+            raise ValueError("Distance option not recognize. Must be 'eucl' or 'manh'")   
         features_PC["dist"] = dist.values
         features_PC = features_PC.sort_values(by="dist", ascending=True).reset_index()
-
+    
         wghts = {
             ftr_name: wght
             for ftr_name, wght in zip(features.columns, pca.components_[0] ** 2)
         }
 
+        if keep_ftrs:
+            features_PC = features_PC.merge(self.ftrsDF.reset_index(), on="runnb", how="left")
+    
         return features_PC, wghts
 
-    def hierarch_clust(self, target_runnb, n_components=1, corr_thrshld=0.7, rtrn_stats=False):
-        _, wghts = self.refrank_pca(target_runnb, n_components=n_components)
+    
+    def filterRuns(self, runnbs=None):
+        """Returns feature dataframe of specified run numbers."""
+        if runnbs is None:
+            return self.ftrsDF
+        return self.ftrsDF[self.ftrsDF.index.isin(runnbs)]
+
+    
+    def hierarch_clust(self, target_runnb, n_components=1, corr_thrshld=0.7, runnbs=None, rtrn_stats=False, dist_metric="eucl"):
+        """Selected features by their correlation and PC1 assigned weight"""
+        filtered_ftrsDF = self.filterRuns(runnbs)
+    
+        _, wghts = self.refrank_pca(target_runnb, n_components=n_components, runnbs=runnbs, dist_metric=dist_metric)
         wghts_df = pd.DataFrame(list(wghts.items()), columns=["Feature", "Weight"])
         wghts_df = wghts_df.sort_values(by="Weight", ascending=False).reset_index(drop=True)
         
-        corr_mtrx = self.ftrsDF.corr()
+        # Clustering
+        corr_mtrx = filtered_ftrsDF.corr()
         corr_mtrx = corr_mtrx.fillna(0)
-        corr_dist = 1-corr_mtrx.abs()
+        corr_dist = 1 - corr_mtrx.abs()
         
         dist_condensed = corr_dist.values[np.triu_indices_from(corr_dist, k=1)]
         linkage_mtrx = linkage(dist_condensed, method="complete")
         clusters = fcluster(linkage_mtrx, t=corr_thrshld, criterion="distance")
-        
+
+        # Group by cluster
         clustered_ftrs = {}
         for idx, cluster_id in enumerate(clusters):
             feature = corr_mtrx.columns[idx]
@@ -114,27 +151,33 @@ class RunRanker:
                 clustered_ftrs[cluster_id] = [feature]
             else:
                 clustered_ftrs[cluster_id].append(feature)
+    
+        # Ftr selection
         selected_ftrs = []
-        
         for cluster, features in clustered_ftrs.items():
-            if len(features) == 1:
-                selected_ftrs.append(features[0])
-            else:
-                top_ftr_idx = wghts_df[wghts_df["Feature"].isin(features)]["Weight"].idxmax()
-                top_ftr = wghts_df.iloc[top_ftr_idx]["Feature"]
-                selected_ftrs.append(top_ftr)
-
+            top_wghts = wghts_df[wghts_df["Feature"].isin(features)]
+            selected_ftrs.append(
+                top_wghts.loc[top_wghts["Weight"].idxmax(), "Feature"]   
+            )
+    
         if rtrn_stats:
+            from scipy.cluster.hierarchy import leaves_list
             order = leaves_list(linkage_mtrx)
             ordered_corr_mtrx = corr_mtrx.iloc[order, order]
             return selected_ftrs, ordered_corr_mtrx, linkage_mtrx
+        
         return selected_ftrs
 
-    def refrank_pca_hierarch(self, target_runnb, n_components=1, keep_ftrs=True, corr_thrshld=0.7):
-        selected_ftrs = self.hierarch_clust(target_runnb, n_components=n_components, corr_thrshld=corr_thrshld)
-        rslts, wghts = self.refrank_pca(target_runnb, n_components=n_components, keep_ftrs=keep_ftrs, selected_ftrs=selected_ftrs)
-        return (rslts, wghts)
+    
+    def refrank_pca_hierarch(self, target_runnb, n_components=1, keep_ftrs=True, corr_thrshld=0.7, runnbs=None, dist_metric="eucl"):
+        """
+        Combines PCA ranking with hierarchical clustering to avoid using highly correlated features.
+        """
+        selected_ftrs = self.hierarch_clust(target_runnb, n_components=n_components, corr_thrshld=corr_thrshld, runnbs=runnbs, dist_metric=dist_metric)
+        rslts, wghts = self.refrank_pca(target_runnb, n_components=n_components, keep_ftrs=keep_ftrs, selected_ftrs=selected_ftrs, runnbs=runnbs, dist_metric=dist_metric)
+        return rslts, wghts
 
+    
     def lowcorr_highweight(
         self,
         features,

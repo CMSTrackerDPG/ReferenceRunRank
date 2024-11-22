@@ -13,6 +13,7 @@ packages = [{ include = "refrunrank", from = "src" }]
 python = "^3.11"
 numpy = "^1.26.4"
 pandas = "^2.2.2"
+matplotlib = "^3.8.3"
 cmsdials = "^1.4.0"
 dqmexplore = { git = "https://github.com/CMSTrackerDPG/DQMExplore.git" }
 ipykernel = { version = "^6.29.4", optional = true }
