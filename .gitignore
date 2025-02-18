@@ -3,3 +3,5 @@ clientid.*
 data/
 .ruff_cache
 dist/
+.cache
+.env
