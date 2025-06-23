@@ -1,14 +1,14 @@
 # Features intended for ranking.
 rankingftrs = [
-    "b_field",
+    "b_field",  #
     "l1_triggers_counter",
     "hlt_physics_throughput",
     "init_lumi",
     "crossing_angle_stop",
-    "energy",
+    "energy",  #
     "end_lumi",
     "hlt_physics_rate",
-    "fill_number",
+    "fill_number",  #
     "crossing_angle_start",
     "beta_star_start",
     "initial_prescale_index",
