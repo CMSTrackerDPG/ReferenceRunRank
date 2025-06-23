@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "refrunrank"
-version = "0.3.0"
+version = "1.0.0"
 description = "Tools for the automated selection of reference runs"
 authors = [
     {name = "Roy Cruz", email = "roy.cruz.candelaria@cern.ch"},
@@ -14,7 +14,7 @@ readme = "README.md"
 requires-python = ">=3.11,<4.0"
 dependencies = [
     "cmsdials[pandas,tqdm]>=1.5.0",
-    "tabulate>=0.9.0",
+    "dqmexplore@git+https://github.com/CMSTrackerDPG/DQMExplore.git"
     "scikit-learn>=1.6.1",
 ]
 
