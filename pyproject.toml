@@ -14,7 +14,7 @@ readme = "README.md"
 requires-python = ">=3.11,<4.0"
 dependencies = [
     "cmsdials[pandas,tqdm]>=1.5.0",
-    "dqmexplore@git+https://github.com/CMSTrackerDPG/DQMExplore.git"
+    "dqmexplore@git+https://github.com/CMSTrackerDPG/DQMExplore.git",
     "scikit-learn>=1.6.1",
 ]
 
