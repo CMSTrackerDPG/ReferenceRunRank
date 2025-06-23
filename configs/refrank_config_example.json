@@ -1,0 +1,33 @@
+    {
+    "ftrs": {
+        "runs": [
+            "energy",
+            "b_field",
+            "hlt_physics_rate"
+        ],
+        "lumisections": {
+            "mean":["pileup"],
+            "std": ["pileup"],
+            "50%": ["pileup"]
+        }
+    },
+    "pca_ftrs": {
+        "runs": [
+            "hlt_physics_counter",
+            "run_number",
+            "fill_number"
+        ],
+        "lumisections": {
+            "mean":["recorded_lumi"],
+            "std": ["recorded_lumi"],
+            "50%": ["recorded_lumi"]
+        }
+    },
+    "runs":[
+        [387528, 387696]
+    ],
+    "filters": {
+        "b_field": {"EQ": 3.8},
+        "last_lumisection_number": {"GT": 500}
+    }
+}

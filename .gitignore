@@ -1,0 +1,8 @@
+__pycache__
+clientid.*
+data/
+.ruff_cache
+dist/
+.cache
+.env
+build

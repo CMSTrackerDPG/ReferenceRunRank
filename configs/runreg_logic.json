@@ -1,0 +1,7 @@
+{
+  "and": [
+    {"==": [{"var": "lumisection.rr.tracker-pixel"}, "GOOD"]},
+    {"==": [{"var": "lumisection.rr.tracker-strip"}, "GOOD"]},
+    {"==": [{"var": "lumisection.rr.tracker-track"}, "GOOD"]}
+  ]
+}
