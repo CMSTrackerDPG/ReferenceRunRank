@@ -1,13 +1,32 @@
 # Reference Run Ranking
 
-## Overview
+## Setup
 
-This project focuses on developing tools to automate the reference run selection for data quality monitoring at CMS. It uses Principal Component Analysis as its primary tool to rank a set of candidate runs by how similar in data taking conditions they are to a particular target run one wishes to find a referece run for.
+To install Reference Run Ranking (RRR), run the following in your virtual environment.
 
-## Concept
+```bash
+pip3 install git+https://github.com/CMSTrackerDPG/ReferenceRunRank.git
+```
 
-The base algorithm uses the data taking conditions (luminosity, fill number, etc.) as features to find the principal components for a set of given runs (candidates + target) and projects these runs unto this PCA subspace. With the reduced dimensionality, candidate runs are ranked according to the Euclidian distance from the target run. One can also use hierarchical clustering before the ranking in order to automatically have the least correlated features selected used.
+## Running Reference Run Ranking
 
-## Contributions and Feedback
+### Command Line
 
-This project was originally worked on by Guillermo Fidalgo.
+You can run RRR from your terminal by using the command `rrr`. The basic requirements to run the script are:
+
+* RRR configuration JSON
+    - Example: [`configs/refrank_config_example.json`](configs/refrank_config_example.json)
+    - In this configuration file, you can specify the features that you want to use for the ranking, as well as the runs that will be fetched from OMS and be treated as targets, and filters on those runs.
+* "Golden" JSON (Optional)
+    - Can be an official, or a user defined golden JSON. It can be fetched through the [JSON portal](https://cmsrunregistry.web.cern.ch/json_portal) in Run Registry, or by using the command `fetch_golden` from DQM Explore ([documentation]()).
+* Target run:
+    - You will need to provide the run number of the run you want to find a reference run for. This number does not need to be included in the RRR configuration JSON.
+
+Basic example usage:
+```bash
+rrr --config configs/refrank_config.json --golden ./jsons/golden_PromptReco-Collisions2024-2025.json --rslts_fname ./rankings/rankings_385312.json --target 385312
+```
+
+### Notebook
+
+An example notebook is included for running the ranking algorithm and/or loading results JSON files to study the results closer. This notebook can be found in [`notebooks/RefRunRank.ipynb`](notebooks/RefRunRank.ipynb)
