@@ -1,4 +1,4 @@
-{
+    {
     "ftrs": {
         "runs": [
             "energy",
@@ -24,9 +24,10 @@
         }
     },
     "runs":[
-        387721, [387714, 386812]
+        [387528, 387696]
     ],
     "filters": {
-        "b_field": {"EQ": 3.8}
+        "b_field": {"EQ": 3.8},
+        "last_lumisection_number": {"GT": 500}
     }
 }
