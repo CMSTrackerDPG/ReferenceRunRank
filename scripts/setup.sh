@@ -14,5 +14,10 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo "Cloning the ReferenceRunRank repository..."
+git clone https://github.com/CMSTrackerDPG/ReferenceRunRank.git && cd ReferenceRunRank
+
 echo "Installing required packages..."
 pip3 install .
+
+exit 0
