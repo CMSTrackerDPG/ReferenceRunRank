@@ -2,7 +2,7 @@ import os
 import json
 import pandas as pd
 import requests
-import json
+
 
 def loadJSONasDF(JSONFilePath):
     """ """
@@ -20,6 +20,7 @@ def loadJSONasDF(JSONFilePath):
         jsondf = pd.DataFrame(JSONdict.items()).convert_dtypes()
     return jsondf
 
+
 def makeDF(json):
     datadict = json["data"][0]["attributes"]
     keys = datadict.keys()
@@ -29,7 +30,8 @@ def makeDF(json):
     for i in range(len(json["data"])):
         values = json["data"][i]["attributes"].values()
         datasetlist.append(values)
-    return pd.DataFrame(datasetlist, columns=keys) 
+    return pd.DataFrame(datasetlist, columns=keys)
+
 
 def loadFromWeb(url, output_file):
     try:
@@ -38,11 +40,11 @@ def loadFromWeb(url, output_file):
         if response.status_code == 200:
             # Parse the response content as JSON
             data = response.json()
-            
+
             # Store the data as JSON
-            with open(output_file, 'w') as file:
+            with open(output_file, "w") as file:
                 json.dump(data, file, indent=4)
-            
+
             print(f"Data successfully fetched and stored in {output_file}")
         else:
             print(f"Failed to fetch data. HTTP Status Code: {response.status_code}")

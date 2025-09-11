@@ -2,7 +2,7 @@ import argparse
 import refrunrank as rrr
 import json
 import dqmexplore as dqme
-from tabulate import tabulate
+import runregistry
 
 EPs = set(["runs", "lumisections"])
 
@@ -18,7 +18,22 @@ def main():
         help="Configuration JSON path",
     )
     # Run Registry
-    parser.add_argument("--golden", type=str, default=None, help="Golden JSON path")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--golden", type=str, default=None, help="Golden JSON path")
+    group.add_argument(
+        "--golden_config", type=str, default=None, help="Golden JSON config path"
+    )
+    parser.add_argument(
+        "--golden_config_dataset",
+        type=str,
+        default="/Express/Collisions2024/DQM",
+        help="Dataset to be used when fetching golden JSON using config",
+    )
+    # Argument to dump generated golden JSON. SHould only be used with --golden_config. Argument is either true or false, with the default being false
+    parser.add_argument(
+        "--dump_golden", action="store_true", help="Dump generated golden JSON"
+    )
+
     # Ranking options
     parser.add_argument(
         "--n_components", type=int, default=4, help="Number of PCA components to use"
@@ -64,11 +79,40 @@ def main():
             match_runs=(endpoint == "lumisections"),
         )
 
-    omsdata.applyGoldenJSON(args.golden, keep=[args.target])
-
+    # Check if data is fetched
     if omsdata._data is None:
         raise ValueError(
-            "No data fetched from OMS. Please check your configuration and endpoints."
+            "No data fetched from OMS. Please check your configurations and endpoints."
+        )
+
+    # Apply golden JSON if provided
+    if args.golden is not None:
+        omsdata.applyGoldenJSON(args.golden, keep=[args.target])
+    elif args.golden_config is not None:
+        with open(args.golden_config) as f:
+            golden_config = json.load(f)
+        print(
+            f"Generating golden JSON using dataset:\n   Dataset:{args.golden_config_dataset}\n   Logic: {args.golden_config}"
+        )
+
+        rr_data = runregistry.create_json(
+            json_logic=golden_config,
+            dataset_name_filter=golden_config.get(
+                "dataset", args.golden_config_dataset
+            ),
+        )["generated_json"]
+        if args.dump_golden:
+            with open("generated_golden.json", "w") as gf:
+                json.dump(rr_data, gf, indent=4)
+            print("Generated golden JSON dumped to generated_golden.json")
+        omsdata.applyGoldenJSON(rr_data, keep=[args.target])
+    else:
+        print("WARNING: No golden JSON provided. Proceeding without it.")
+
+    # Check if any runs are left after applying golden JSON
+    if len(omsdata._data["runs"]) <= 1:
+        raise ValueError(
+            "No runs left after applying golden JSON. Please check your golden JSON or the configuration you used to generate it."
         )
 
     ranker = rrr.ranking.RunRanker(omsdata, ftrs=config)
